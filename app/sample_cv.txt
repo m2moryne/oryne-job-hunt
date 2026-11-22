@@ -1,0 +1,26 @@
+Amara Njeri
+Nairobi, Kenya · amara.njeri@example.com · github.com/amaranjeri
+
+SUMMARY
+Backend developer with 4 years of experience building APIs and payment features in Python. Comfortable owning a service end to end, from design to production on-call.
+
+EXPERIENCE
+Backend Developer, Tumaini Pay (fintech), Nairobi · 2023 to now
+- Built the Python (FastAPI) service that handles 40,000 mobile-money payments a day, with PostgreSQL and Redis.
+- Cut payment failure rates from 3.1% to 0.8% by adding idempotency keys and retry queues (Celery).
+- Moved services to Docker and AWS (ECS), and set up CI/CD with GitHub Actions.
+- Mentor two junior developers; lead code reviews for the payments team.
+
+Software Developer, Duka Digital (e-commerce), Nairobi · 2021 to 2023
+- Built REST APIs in Django for a marketplace with 15,000 sellers.
+- Wrote the integration with M-Pesa and card payments; added automated tests that brought coverage to 85%.
+- Worked with the frontend team (React) on checkout performance.
+
+SKILLS
+Python, FastAPI, Django, PostgreSQL, Redis, Celery, Docker, AWS, REST APIs, GitHub Actions, SQL, Git, Linux, basic React and TypeScript
+
+EDUCATION
+BSc Computer Science, University of Nairobi, 2020
+
+LANGUAGES
+English (fluent), Swahili (native)

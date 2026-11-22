@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Job Hunt Agent · pays its own way with Oryne</title>
+  <meta name="description" content="An AI agent that hunts jobs for you and pays for each service from its own Oryne wallet, inside limits it can't break." />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <strong>Job Hunt Agent</strong>
+        <span class="muted">pays its own way with <a href="https://oryne.org" target="_blank" rel="noopener">Oryne</a></span>
+      </div>
+    </div>
+    <span class="badge">Stellar testnet · test USDC, nothing real is spent</span>
+  </header>
+
+  <section class="hero">
+    <h1>Give it your CV. It finds the jobs, scores them, writes the letters, and pays for every step itself.</h1>
+    <p>
+      The agent has its own wallet. You decide which paid services it may buy and how much it may spend.
+      Those limits live in a smart contract on Stellar, so the agent can't go past them, whatever it's told.
+      Anything over the limit, it asks you first.
+    </p>
+  </section>
+
+  <main class="grid">
+    <form id="form" class="panel">
+      <h2><span class="step">1</span> Your CV</h2>
+      <textarea id="cv" rows="9" placeholder="Paste your CV here…"></textarea>
+      <div class="row">
+        <label class="button ghost small">Upload PDF, Word or text<input id="cvFile" type="file" accept=".pdf,.docx,.txt,.md" hidden /></label>
+        <button type="button" id="sample" class="ghost small">Use a sample CV</button>
+        <span class="muted tiny">Used for this run only, never stored.</span>
+      </div>
+
+      <h2><span class="step">2</span> What you're looking for</h2>
+      <div class="row two">
+        <label>Job title<input id="role" placeholder="e.g. Python developer, customer support" required /></label>
+        <label>Location (optional)<input id="location" placeholder="e.g. Europe, USA, worldwide" /></label>
+      </div>
+      <div id="boards" class="chips"></div>
+
+      <h2><span class="step">3</span> What the agent may pay for</h2>
+      <p class="muted tiny">Each one is a paid API call (x402) to CareerKit, settled in USDC on Stellar in about 5 seconds.</p>
+      <div id="services" class="services"></div>
+      <label class="inline">Cover letters, at most <input id="maxLetters" type="number" min="0" max="5" value="3" class="narrow" /></label>
+
+      <h2><span class="step">4</span> Its wallet and limits</h2>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" data-mode="demo">Demo wallet · instant</button>
+        <button type="button" class="tab" data-mode="own">My Oryne agent</button>
+      </div>
+      <div id="mode-demo" class="mode">
+        <p class="muted tiny">We connect a fresh agent to a demo wallet with the limits you set here, signed on Stellar. You approve on this page.</p>
+        <div class="row two">
+          <label>Most per payment (USDC)<input id="perTx" type="number" step="0.05" min="0.05" max="10" value="1" /></label>
+          <label>Total budget (USDC)<input id="budget" type="number" step="0.05" min="0.05" max="20" value="3" /></label>
+        </div>
+        <p id="estimate" class="hint"></p>
+      </div>
+      <div id="mode-own" class="mode" hidden>
+        <ol class="tiny">
+          <li>Sign in at <a href="https://oryne.org/app" target="_blank" rel="noopener">oryne.org/app</a> and switch to <b>Test</b> mode.</li>
+          <li><b>Funds → Add money → Test USDC</b>, then <b>Agents → Connect agent</b>. Try 1 USDC per payment and a 5 USDC budget.</li>
+          <li>Optionally limit it to CareerKit only: payee <code id="payee" class="copy" title="Click to copy"></code></li>
+          <li>Paste the agent's secret (S…) here. It's used for this run only, never stored.</li>
+        </ol>
+        <label>Agent secret<input id="agentSecret" type="password" placeholder="S…" autocomplete="off" spellcheck="false" /></label>
+        <p class="muted tiny">You'll approve over-limit payments in your Oryne dashboard, signed with your own passkey or Freighter.</p>
+      </div>
+
+      <p id="formError" class="error" hidden></p>
+      <button id="start" type="submit" class="primary">Start the job hunt</button>
+      <p class="muted tiny center" id="modelNote"></p>
+    </form>
+
+    <section id="live" class="panel live">
+      <div id="idle" class="idle">
+        <h2>What happens</h2>
+        <ol class="how">
+          <li><b>The agent gets a wallet</b> with your limits, written into a contract on Stellar.</li>
+          <li><b>It searches</b> Remotive, Jobicy, Remote OK and Arbeitnow at once: 0.05 USDC.</li>
+          <li><b>It scores</b> the jobs that look right against your CV: 0.02 USDC each.</li>
+          <li><b>It writes cover letters</b> for the best matches: 0.25 USDC each.</li>
+          <li><b>It asks you</b> before the 5 USDC application pack, because that's over its limit. The wallet refuses it until you approve.</li>
+          <li><b>You get</b> a shortlist, letters and a receipt, every payment linked to its Stellar transaction.</li>
+        </ol>
+      </div>
+
+      <div id="running" hidden>
+        <div class="wallet card">
+          <div class="wallet-head">
+            <div><span class="muted tiny">Agent wallet</span><div id="walletLine" class="mono tiny"></div></div>
+            <button id="stop" class="ghost small" type="button">Stop</button>
+          </div>
+          <div class="meter"><div id="meterFill"></div></div>
+          <div class="meter-labels tiny"><span id="spentLabel">0 USDC spent</span><span id="limitLabel"></span></div>
+        </div>
+
+        <div id="approval" class="card approval" hidden></div>
+
+        <h3>Live</h3>
+        <ol id="timeline" class="timeline"></ol>
+
+        <div id="summary" class="card summary" hidden></div>
+        <h3 id="jobsTitle" hidden>Shortlist</h3>
+        <div id="jobs" class="jobs"></div>
+        <div id="pack" class="card pack" hidden></div>
+        <div id="receipt" class="card" hidden></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot tiny muted">
+    Job listings from <a href="https://remotive.com" target="_blank" rel="noopener">Remotive</a>,
+    <a href="https://jobicy.com" target="_blank" rel="noopener">Jobicy</a>,
+    <a href="https://remoteok.com" target="_blank" rel="noopener">Remote OK</a> and
+    <a href="https://www.arbeitnow.com" target="_blank" rel="noopener">Arbeitnow</a>: apply on the original posting.
+    CareerKit's paid API: <a href="/careerkit/" target="_blank">/careerkit</a> ·
+    <a href="/careerkit/docs" target="_blank">docs</a>. Built with <a href="https://oryne.org" target="_blank" rel="noopener">Oryne</a>.
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
