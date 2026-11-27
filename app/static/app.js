@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id)
 const esc = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const safeUrl = (url) => (/^https:\/\//.test(url || '') ? url : '#')
-const short = (text, n = 10) => (text ? `${text.slice(0, n)}…` : '')
+const short = (text, n = 8) => (text ? `${text.slice(0, n)}…` : '')
 
 let config = null
 let mode = 'demo'
@@ -12,64 +12,56 @@ let state = null
 async function load() {
   config = await (await fetch('/api/config')).json()
   $('boards').innerHTML = config.boards
-    .map((b) => `<label class="chip" title="${esc(b.about)}"><input type="checkbox" value="${esc(b.id)}" checked /> ${esc(b.name)}</label>`)
+    .map((b) => `<label class="chip" title="${esc(b.about)}"><input type="checkbox" value="${esc(b.id)}" checked />${esc(b.name)}</label>`)
     .join('')
   $('services').innerHTML = config.services
     .map(
       (s) => `
-      <label class="service">
-        <input type="checkbox" value="${esc(s.id)}" ${s.id === 'search' ? 'checked disabled' : 'checked'} />
-        <span><span class="name">${esc(s.name)}</span><br /><span class="about">${esc(s.about)}</span>
-          <span class="flag" data-flag="${esc(s.id)}"></span></span>
-        <span class="price">${esc(s.price)} USDC</span>
+      <label class="item">
+        <input type="checkbox" value="${esc(s.id)}" checked ${s.id === 'search' ? 'disabled' : ''} />
+        <span><span class="name">${esc(s.name)}</span><span class="about">${esc(s.about)}</span><span class="flag" data-flag="${esc(s.id)}"></span></span>
+        <span class="price">${esc(s.price)}<em>USDC</em></span>
       </label>`,
     )
     .join('')
-  $('payee').textContent = config.careerkitAddress
+  $('payee').textContent = short(config.careerkitAddress, 12)
+  $('payee').title = `${config.careerkitAddress} (click to copy)`
   $('payee').onclick = () => navigator.clipboard?.writeText(config.careerkitAddress)
-  $('modelNote').textContent = config.model
-    ? `Thinking: ${config.model}. Payments: Oryne on Stellar testnet.`
-    : 'No model key on this server: the agent follows a fixed plan and uses templates.'
+  $('modelNote').textContent = config.model ? '' : 'No model key on this server: the agent follows a fixed plan.'
   if (!config.demoReady) switchMode('own')
   document.querySelectorAll('#services input, #perTx, #budget, #maxLetters').forEach((el) => el.addEventListener('input', estimate))
   estimate()
 }
 
-function chosen(selector) {
-  return [...document.querySelectorAll(`${selector} input:checked`)].map((el) => el.value)
-}
+const chosen = (selector) => [...document.querySelectorAll(`${selector} input:checked`)].map((el) => el.value)
+const price = (id) => Number(config.services.find((s) => s.id === id)?.price ?? 0)
 
-function price(id) {
-  return Number(config.services.find((s) => s.id === id)?.price ?? 0)
-}
-
-/** What the agent could spend, and which services the limits will stop. */
+/** What the agent could spend, and which services its limits will stop. */
 function estimate() {
   const services = chosen('#services')
   const perTx = Number($('perTx').value)
   const budget = Number($('budget').value)
   const letters = Math.min(Number($('maxLetters').value) || 0, 5)
   for (const flag of document.querySelectorAll('[data-flag]')) {
-    const over = price(flag.dataset.flag) > perTx
-    flag.textContent = over ? `Over the ${perTx} USDC per-payment limit: the wallet refuses it until you approve` : ''
+    flag.textContent = price(flag.dataset.flag) > perTx ? 'Over the per-payment limit: needs your approval' : ''
   }
   let most = price('search') * 2
   if (services.includes('match')) most += price('match') * 6
   if (services.includes('cover_letter')) most += price('cover_letter') * letters
   const pack = services.includes('application_pack') ? price('application_pack') : 0
   $('estimate').innerHTML =
-    `Typical run: about <b>${most.toFixed(2)} USDC</b> in small payments` +
-    (pack ? `, plus <b>${pack} USDC</b> for the pack if you approve it.` : '.') +
-    ` The wallet stops at <b>${budget} USDC</b> whatever happens.`
+    `A typical run spends about <b>${most.toFixed(2)} USDC</b>` +
+    (pack ? `, plus <b>${pack}</b> for the pack if you approve it` : '') +
+    `. The wallet stops at <b>${budget} USDC</b>, whatever happens.`
 }
 
 function switchMode(next) {
   mode = next
-  document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.mode === next))
+  document.querySelectorAll('.seg').forEach((seg) => seg.classList.toggle('active', seg.dataset.mode === next))
   $('mode-demo').hidden = next !== 'demo'
   $('mode-own').hidden = next !== 'own'
 }
-document.querySelectorAll('.tab').forEach((tab) => (tab.onclick = () => switchMode(tab.dataset.mode)))
+document.querySelectorAll('.seg').forEach((seg) => (seg.onclick = () => switchMode(seg.dataset.mode)))
 
 $('sample').onclick = () => {
   $('cv').value = config.sampleCv
@@ -84,6 +76,7 @@ $('cvFile').onchange = async (event) => {
   const response = await fetch('/api/cv-file', { method: 'POST', body })
   const data = await response.json()
   if (!response.ok) return showError(data.detail || 'Could not read that file')
+  showError('')
   $('cv').value = data.text
 }
 
@@ -107,8 +100,7 @@ $('form').onsubmit = async (event) => {
     budget: $('budget').value,
     agentSecret: $('agentSecret').value,
   }
-  $('start').disabled = true
-  $('start').textContent = 'Starting…'
+  setStart('Starting…', true)
   try {
     const response = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json()
@@ -117,9 +109,13 @@ $('form').onsubmit = async (event) => {
     begin(data.id, data.mode, body)
   } catch (error) {
     showError(error.message)
-    $('start').disabled = false
-    $('start').textContent = 'Start the job hunt'
+    setStart('Start', false)
   }
+}
+
+function setStart(text, disabled) {
+  $('start').textContent = text
+  $('start').disabled = disabled
 }
 
 // ---------------------------------------------------------------- the live view
@@ -128,99 +124,99 @@ function begin(id, runMode, form) {
   state = { id, mode: runMode, jobs: {}, scores: {}, letters: {}, payments: [], spent: 0, budget: Number(form.budget) }
   $('idle').hidden = true
   $('running').hidden = false
-  ;['timeline', 'jobs'].forEach((el) => ($(el).innerHTML = ''))
-  ;['summary', 'pack', 'receipt', 'approval', 'jobsTitle'].forEach((el) => ($(el).hidden = true))
+  $('timeline').innerHTML = ''
+  $('jobs').innerHTML = ''
+  for (const el of ['summary', 'pack', 'receipt', 'approval', 'jobsTitle']) $(el).hidden = true
   $('walletLine').textContent = 'Connecting…'
-  $('start').textContent = 'Running…'
-  if (window.innerWidth < 900) $('live').scrollIntoView({ behavior: 'smooth' })
+  $('limitLabel').textContent = ''
+  meter()
+  setStart('Running…', true)
+  if (window.innerWidth < 1024) $('live').scrollIntoView({ behavior: 'smooth' })
   const source = new EventSource(`/api/runs/${id}/events`)
   source.onmessage = (message) => handle(JSON.parse(message.data), source)
-  source.onerror = () => {
-    if (state?.closed) source.close()
-  }
+  source.onerror = () => state?.closed && source.close()
 }
 
 $('stop').onclick = () => state && fetch(`/api/runs/${state.id}/cancel`, { method: 'POST' })
 
-function line(icon, html, cls = '') {
+function line(tag, html, kind = '') {
   const li = document.createElement('li')
-  li.innerHTML = `<span class="icon">${icon}</span><span class="${cls}">${html}</span>`
+  li.className = kind
+  li.innerHTML = `<span class="tag">${esc(tag)}</span><span>${html}</span>`
   $('timeline').appendChild(li)
   li.scrollIntoView({ block: 'nearest' })
 }
 
-const txLink = (event) => (event.explorer ? ` <a class="tx" href="${safeUrl(event.explorer)}" target="_blank" rel="noopener">tx ${esc(short(event.tx))}</a>` : '')
+const txLink = (event) =>
+  event.explorer ? `<a class="tx" href="${safeUrl(event.explorer)}" target="_blank" rel="noopener">${esc(short(event.tx))} ↗</a>` : ''
+const jobName = (id, fallback) => esc(state.jobs[id]?.title || fallback)
 
 const TOOL_TEXT = {
-  search_jobs: (a) => `Searching for “${esc(a.query)}”`,
-  score_job: (a) => `Scoring ${esc(state.jobs[a.job_id]?.title || 'a job')} against your CV`,
-  write_cover_letter: (a) => `Writing a cover letter for ${esc(state.jobs[a.job_id]?.title || 'a job')}`,
-  buy_application_pack: (a) => `Buying the application pack for ${esc(state.jobs[a.job_id]?.title || 'the best match')}`,
-  wallet_status: () => 'Checking its budget',
+  search_jobs: (a) => ['Search', `Searching for “${esc(a.query)}”`],
+  score_job: (a) => ['Score', `Scoring ${jobName(a.job_id, 'a job')}`],
+  write_cover_letter: (a) => ['Write', `Cover letter for ${jobName(a.job_id, 'a job')}`],
+  buy_application_pack: (a) => ['Pack', `Application pack for ${jobName(a.job_id, 'the best match')}`],
+  wallet_status: () => ['Check', 'Checking its budget'],
 }
 
 function handle(event, source) {
   switch (event.type) {
     case 'setup':
-      line('🔐', esc(event.text))
+      line('Wallet', 'Connecting an agent with your limits', 'quiet')
       break
     case 'wallet':
       state.budget = Number(event.budget)
-      $('walletLine').innerHTML =
-        `${esc(event.mode === 'demo' ? 'Demo wallet' : 'Your wallet')} ${esc(short(event.wallet, 8))} · agent ${esc(short(event.agent, 8))}` +
-        (event.explorer ? ` · <a href="${safeUrl(event.explorer)}" target="_blank" rel="noopener">add_agent tx</a>` : '')
-      $('limitLabel').textContent = `limit ${event.perTx} per payment · budget ${event.budget}`
-      line('✅', `Agent connected: <b>${esc(event.perTx)} USDC</b> per payment, <b>${esc(event.budget)} USDC</b> budget` + txLink(event))
+      $('walletLine').innerHTML = `${event.mode === 'demo' ? 'Demo wallet' : 'Your wallet'} ${esc(short(event.wallet))}`
+      $('limitLabel').textContent = `${event.perTx} per payment · ${event.budget} budget`
+      line('Wallet', `Agent connected: ${esc(event.perTx)} USDC per payment, ${esc(event.budget)} budget ${txLink(event)}`)
       break
     case 'note':
-      line('ℹ️', esc(event.text), 'muted')
+      line('Note', esc(event.text), 'quiet')
       break
     case 'thinking':
-      line('💭', esc(event.text), 'muted')
+      line('Thinks', esc(event.text), 'quiet')
       break
-    case 'tool':
-      line('🔧', (TOOL_TEXT[event.name] || ((a) => esc(event.name)))(event.args || {}))
+    case 'tool': {
+      const [tag, text] = (TOOL_TEXT[event.name] || (() => ['Tool', esc(event.name)]))(event.args || {})
+      line(tag, text)
       break
-    case 'paying':
-      line('💳', `Paying ${esc(event.amount)} USDC: ${esc(event.what)}`, 'muted')
-      break
+    }
     case 'paid':
       state.spent = Number(event.spent)
       state.payments.push(event)
-      line('✔', `Paid <b>${esc(event.amount)} USDC</b>, settled on Stellar` + txLink(event), 'paid')
+      line('Paid', `${esc(event.amount)} USDC, settled on Stellar ${txLink(event)}`, 'paid')
       meter()
       break
     case 'refused':
       line(
-        '⛔',
+        'Refused',
         event.by === 'wallet'
-          ? `<b>The wallet contract refused</b> ${esc(event.amount)} USDC: ${esc(event.reason)}. Nothing moved.`
+          ? `The wallet contract refused ${esc(event.amount)} USDC (${esc(event.reason)}). Nothing moved.`
           : `Not signed: ${esc(event.reason)}`,
         'refused',
       )
       break
     case 'approval_needed':
-      line('🙋', `Asking you to approve <b>${esc(event.amount)} USDC</b> for the ${esc(event.what)}`, 'ask')
+      line('Asks', `Approval for ${esc(event.amount)} USDC: ${esc(event.what)}`, 'ask')
       showApproval(event)
       break
     case 'approving':
-      $('approval').innerHTML = '<p>Signing <code>approve_once</code> on Stellar…</p>'
+      $('approval').innerHTML = '<p class="label">Approval</p><p>Signing approve_once on Stellar…</p>'
       break
     case 'approved_onchain':
-      line('👍', `Owner signed approve_once` + txLink(event), 'paid')
+      line('Approved', `One-time approval signed ${txLink(event)}`, 'paid')
       break
     case 'approval_decided':
       $('approval').hidden = true
-      if (event.status !== 'approved') line('👎', `Not approved (${esc(event.status)}). The agent carries on without it.`, 'muted')
+      if (event.status !== 'approved') line('Declined', 'The agent carries on without it', 'quiet')
       break
     case 'jobs':
       for (const job of event.jobs) state.jobs[job.id] = job
       line(
-        '📋',
-        `Found ${event.jobs.length} jobs · ` +
-          Object.entries(event.boards || {})
-            .map(([board, outcome]) => `${esc(board)}: ${esc(outcome)}`)
-            .join(', '),
+        'Found',
+        `${event.jobs.length} jobs <span class="tx boards">${Object.entries(event.boards || {})
+          .map(([board, outcome]) => `${esc(board)} ${esc(outcome.replace(' jobs', ''))}`)
+          .join(' · ')}</span>`,
       )
       break
     case 'score':
@@ -235,19 +231,18 @@ function handle(event, source) {
       renderPack(event)
       break
     case 'error':
-      line('⚠️', esc(event.text), 'refused')
+      line('Error', esc(event.text), 'refused')
       break
     case 'done':
-      $('summary').hidden = false
+      $('summary').hidden = !event.summary
       $('summary').textContent = event.summary
       renderReceipt()
       break
     case 'closed':
       state.closed = true
       source.close()
-      $('start').disabled = false
-      $('start').textContent = 'Run it again'
       $('approval').hidden = true
+      setStart('Run again', false)
       break
   }
 }
@@ -255,21 +250,22 @@ function handle(event, source) {
 function meter() {
   const pct = state.budget ? Math.min(100, (100 * state.spent) / state.budget) : 0
   $('meterFill').style.width = `${pct}%`
-  $('spentLabel').textContent = `${state.spent.toFixed(2)} USDC spent`
+  $('spentLabel').textContent = state.spent.toFixed(2)
 }
 
 function showApproval(event) {
   const box = $('approval')
   box.hidden = false
-  const head = `<h4>The agent wants to spend ${esc(event.amount)} USDC</h4>
-    <div>${esc(event.what)}${event.why ? `: ${esc(event.why)}` : ''}</div>
-    <div class="muted tiny">The wallet refused it (${esc(event.reason)}): it's over the agent's limit. Approving signs a one-time exception on Stellar.</div>`
+  const head = `<p class="label">Needs your approval</p>
+    <h3>${esc(event.amount)} USDC for the ${esc(event.what.toLowerCase())}</h3>
+    <p>${event.why ? `${esc(event.why)}. ` : ''}It's over the agent's limit, so the wallet refused it. Approving signs a one-time exception on Stellar.</p>`
   if (state.mode !== 'demo') {
-    box.innerHTML = `${head}<div class="actions"><a class="button ok-btn" href="${safeUrl(config.dashboard)}" target="_blank" rel="noopener">Open Approvals in Oryne</a></div>
-      <p class="muted tiny">The agent waits here until you decide.</p>`
+    box.innerHTML = `${head}<div class="actions"><a class="button primary sm" href="${safeUrl(config.dashboard)}/approvals" target="_blank" rel="noopener">Open Oryne approvals</a></div>`
     return
   }
-  box.innerHTML = `${head}<div class="actions"><button class="ok-btn" id="yes">Approve ${esc(event.amount)} USDC</button><button class="bad-btn" id="no">Decline</button></div>`
+  box.innerHTML = `${head}<div class="actions">
+    <button class="button primary sm" id="yes">Approve</button>
+    <button class="button outline sm" id="no">Decline</button></div>`
   const decide = async (approve) => {
     $('yes').disabled = $('no').disabled = true
     const response = await fetch(`/api/runs/${state.id}/approvals/${event.id}`, {
@@ -277,7 +273,7 @@ function showApproval(event) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ approve }),
     })
-    if (!response.ok) line('⚠️', esc((await response.json()).error || 'Could not record that'), 'refused')
+    if (!response.ok) line('Error', esc((await response.json()).error || 'Could not record that'), 'refused')
   }
   $('yes').onclick = () => decide(true)
   $('no').onclick = () => decide(false)
@@ -290,47 +286,58 @@ function renderJobs() {
     .map((id) => {
       const job = state.jobs[id] || {}
       const s = state.scores[id]
-      const cls = s.score >= 70 ? 'hi' : s.score >= 45 ? 'mid' : 'lo'
+      const cls = s.score >= 70 ? 'hi' : s.score < 40 ? 'lo' : ''
       const letter = state.letters[id]
-      return `<div class="job">
+      const notes =
+        (s.strengths || []).slice(0, 2).map((x) => `<li>${esc(x)}</li>`).join('') +
+        (s.gaps || []).slice(0, 2).map((x) => `<li class="gap">${esc(x)}</li>`).join('')
+      return `<article class="job">
         <div class="job-head">
           <div>
             <div class="job-title">${esc(job.title)}</div>
             <div class="job-meta">${esc(job.company)} · ${esc(job.location)}${job.salary ? ` · ${esc(job.salary)}` : ''}</div>
           </div>
-          <div class="score ${cls}">${esc(s.score)}<small>${esc(s.verdict)}</small></div>
+          <div class="score ${cls}"><strong>${esc(s.score)}</strong><span>${esc(s.verdict)}</span></div>
         </div>
-        <ul>${(s.strengths || []).slice(0, 3).map((x) => `<li>✓ ${esc(x)}</li>`).join('')}${(s.gaps || []).slice(0, 2).map((x) => `<li>△ ${esc(x)}</li>`).join('')}</ul>
-        <div class="links">
+        ${notes ? `<ul class="notes">${notes}</ul>` : ''}
+        <div class="job-links">
           <a href="${safeUrl(job.url)}" target="_blank" rel="noopener">Apply on ${esc(job.source)} ↗</a>
-          ${letter ? '<span class="muted">· cover letter ready</span>' : ''}
+          ${letter ? '<details><summary>Cover letter</summary></details>' : ''}
         </div>
-        ${letter ? `<details><summary>Cover letter</summary><div class="letter">${esc(letter)}</div><button class="ghost small" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent)">Copy</button></details>` : ''}
-      </div>`
+        ${letter ? `<div class="letter" hidden>${esc(letter)}</div>` : ''}
+      </article>`
     })
     .join('')
+  // The letter opens below the links, full width.
+  for (const details of $('jobs').querySelectorAll('details')) {
+    const letter = details.closest('.job').querySelector('.letter')
+    details.ontoggle = () => (letter.hidden = !details.open)
+  }
 }
 
 function renderPack(pack) {
   const box = $('pack')
   box.hidden = false
   const list = (items) => (items || []).map((x) => `<li>${esc(x)}</li>`).join('')
-  box.innerHTML = `<h4>Application pack · ${esc(pack.job)} at ${esc(pack.company)}</h4>
-    <h3>Summary for the top of your CV</h3><p>${esc(pack.summary)}</p>
-    <h3>CV bullets for this job</h3><ul>${list(pack.bullets)}</ul>
-    <h3>Likely interview questions</h3>
+  box.innerHTML = `<p class="label muted">Application pack</p>
+    <h3>${esc(pack.job)}, ${esc(pack.company)}</h3>
+    <h4>CV summary</h4><p>${esc(pack.summary)}</p>
+    <h4>CV bullets</h4><ul>${list(pack.bullets)}</ul>
+    <h4>Interview questions</h4>
     <ol>${(pack.interview || []).map((q) => `<li><b>${esc(q.question)}</b><br /><span class="muted">${esc(q.how_to_answer)}</span></li>`).join('')}</ol>
-    <h3>Keywords to include (where true)</h3><p class="muted">${esc((pack.keywords || []).join(', '))}</p>
-    <details><summary>Cover letter</summary><div class="letter">${esc(pack.cover_letter)}</div></details>`
+    <h4>Keywords</h4><p class="muted">${esc((pack.keywords || []).join(', '))}</p>
+    <h4>Cover letter</h4><div class="letter">${esc(pack.cover_letter)}</div>`
 }
 
 function renderReceipt() {
   if (!state.payments.length) return
   const box = $('receipt')
   box.hidden = false
-  box.innerHTML = `<h3 style="margin-top:0">Receipt</h3><table class="receipt-table">
-    ${state.payments.map((p) => `<tr><td>${esc(p.what)}<br /><a class="tx" href="${safeUrl(p.explorer)}" target="_blank" rel="noopener">tx ${esc(short(p.tx, 12))}</a></td><td>${esc(p.amount)} USDC</td></tr>`).join('')}
-    <tr class="total"><td>Total, paid by the agent from its wallet</td><td>${state.spent.toFixed(2)} USDC</td></tr></table>`
+  box.innerHTML = `<p class="label muted section-label">Receipt</p><table>
+    ${state.payments
+      .map((p) => `<tr><td>${esc(p.what)}<a class="tx" href="${safeUrl(p.explorer)}" target="_blank" rel="noopener">${esc(short(p.tx))} ↗</a></td><td>${esc(p.amount)}</td></tr>`)
+      .join('')}
+    <tr class="total"><td>Paid by the agent from its wallet</td><td>${state.spent.toFixed(2)} USDC</td></tr></table>`
 }
 
 load()
