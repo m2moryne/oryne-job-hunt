@@ -31,7 +31,56 @@ async function load() {
   if (!config.demoReady) switchMode('own')
   document.querySelectorAll('#services input, #perTx, #budget, #maxLetters').forEach((el) => el.addEventListener('input', estimate))
   estimate()
+  $('priceTable').innerHTML = config.services
+    .map((s) => `<div class="price-row"><div><h3>${esc(s.name)}</h3><p>${esc(s.about)}</p></div><strong>${esc(s.price)}<em>USDC</em></strong></div>`)
+    .join('')
 }
+
+// ---------------------------------------------------------------- the home page and the panel
+
+const sheet = $('sheet')
+
+function openSheet() {
+  sheet.hidden = false
+  sheet.classList.remove('closing-out')
+  document.body.classList.add('locked')
+  $('runPill').hidden = true
+  if (location.hash !== '#hunt') history.replaceState(null, '', '#hunt')
+  if (!state) setTimeout(() => $('cv').focus({ preventScroll: true }), 300)
+}
+
+function closeSheet() {
+  sheet.classList.add('closing-out')
+  setTimeout(() => {
+    sheet.hidden = true
+    document.body.classList.remove('locked')
+  }, 240)
+  history.replaceState(null, '', location.pathname)
+  pill()
+}
+
+/** While a run goes on with the panel closed, a pill in the corner shows it and reopens the panel. */
+function pill() {
+  const panelClosed = sheet.hidden || sheet.classList.contains('closing-out')
+  const show = Boolean(state && !state.closed && panelClosed)
+  $('runPill').hidden = !show
+  if (!show) return
+  const asks = !$('approval').hidden
+  $('runPill').classList.toggle('asks', asks)
+  $('runPillText').textContent = asks ? 'Your agent needs your approval' : `Job hunt running · ${state.spent.toFixed(2)} USDC`
+}
+
+document.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('click', openSheet))
+$('closeSheet').onclick = closeSheet
+document.addEventListener('keydown', (event) => event.key === 'Escape' && !sheet.hidden && closeSheet())
+if (location.hash === '#hunt') openSheet()
+
+// Sections fade up as they come into view.
+const seen = new IntersectionObserver(
+  (entries) => entries.forEach((entry) => entry.isIntersecting && (entry.target.classList.add('in'), seen.unobserve(entry.target))),
+  { threshold: 0.12 },
+)
+document.querySelectorAll('.reveal').forEach((el) => seen.observe(el))
 
 const chosen = (selector) => [...document.querySelectorAll(`${selector} input:checked`)].map((el) => el.value)
 const price = (id) => Number(config.services.find((s) => s.id === id)?.price ?? 0)
@@ -133,7 +182,10 @@ function begin(id, runMode, form) {
   setStart('Running…', true)
   if (window.innerWidth < 1024) $('live').scrollIntoView({ behavior: 'smooth' })
   const source = new EventSource(`/api/runs/${id}/events`)
-  source.onmessage = (message) => handle(JSON.parse(message.data), source)
+  source.onmessage = (message) => {
+    handle(JSON.parse(message.data), source)
+    pill()
+  }
   source.onerror = () => state?.closed && source.close()
 }
 

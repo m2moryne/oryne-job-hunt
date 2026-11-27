@@ -4,132 +4,305 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Job agent · Oryne</title>
-  <meta name="description" content="An AI agent that hunts jobs for you and pays for each step from its own Oryne wallet, inside limits it can't break." />
+  <meta name="description" content="An AI agent that finds jobs, scores them against your CV and writes your cover letters, paying for every step from its own Oryne wallet, inside limits it can't break." />
   <meta name="theme-color" content="#202020" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="preload" href="/static/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header class="nav">
-    <a class="brand" href="https://oryne.org" target="_blank" rel="noopener">
-      <img src="/static/oryne-logo.svg" alt="Oryne" />
-    </a>
-    <span class="nav-divider"></span>
-    <span class="nav-title">Job agent</span>
-    <span class="label nav-net">Testnet</span>
+  <!-- Floating navigation -->
+  <header class="topbar">
+    <nav class="glass">
+      <a class="brand" href="#top" aria-label="Job agent home">
+        <img src="/static/oryne-logo.svg" alt="Oryne" />
+        <span class="brand-divider"></span>
+        <span class="brand-name">Job agent</span>
+      </a>
+      <div class="nav-links">
+        <a href="#view">The view</a>
+        <a href="#how">How it works</a>
+        <a href="#limits">Limits</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <button class="button primary sm" data-open>Start a job hunt</button>
+    </nav>
   </header>
 
-  <section class="hero">
-    <p class="label muted">An agent with its own wallet</p>
-    <h1>Finds the jobs. Writes the letters. Pays its own way.</h1>
-    <p class="lede">
-      Give it your CV. It pays for every search, score and letter from an Oryne wallet, inside limits
-      a Stellar contract enforces. Anything over the limit, it asks you first.
-    </p>
-  </section>
-
-  <main class="grid">
-    <form id="form" class="form">
-      <section class="block">
-        <div class="block-head"><span class="label muted">01</span><h2>Your CV</h2></div>
-        <textarea id="cv" rows="8" placeholder="Paste your CV"></textarea>
-        <div class="row">
-          <label class="link">Upload a file<input id="cvFile" type="file" accept=".pdf,.docx,.txt,.md" hidden /></label>
-          <button type="button" id="sample" class="link">Use a sample</button>
-          <span class="muted small push">Never stored</span>
-        </div>
-      </section>
-
-      <section class="block">
-        <div class="block-head"><span class="label muted">02</span><h2>The job</h2></div>
-        <div class="two">
-          <label class="field"><span>Title</span><input id="role" placeholder="Python developer" required /></label>
-          <label class="field"><span>Location <i class="muted">optional</i></span><input id="location" placeholder="Worldwide" /></label>
-        </div>
-        <div id="boards" class="chips"></div>
-      </section>
-
-      <section class="block">
-        <div class="block-head"><span class="label muted">03</span><h2>What it may pay for</h2></div>
-        <div id="services" class="list"></div>
-        <label class="inline small muted">At most <input id="maxLetters" type="number" min="0" max="5" value="3" class="narrow" /> cover letters</label>
-      </section>
-
-      <section class="block">
-        <div class="block-head"><span class="label muted">04</span><h2>Wallet and limits</h2></div>
-        <div class="segmented" role="tablist">
-          <button type="button" class="seg active" data-mode="demo">Demo wallet</button>
-          <button type="button" class="seg" data-mode="own">My Oryne agent</button>
-        </div>
-        <div id="mode-demo" class="mode">
-          <div class="two">
-            <label class="field"><span>Per payment</span><span class="suffix"><input id="perTx" type="number" step="0.05" min="0.05" max="10" value="1" /><em>USDC</em></span></label>
-            <label class="field"><span>Budget</span><span class="suffix"><input id="budget" type="number" step="0.05" min="0.05" max="20" value="3" /><em>USDC</em></span></label>
+  <main id="top">
+    <!-- Hero -->
+    <section class="tone-white hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="label muted reveal">An agent with its own wallet</p>
+          <h1 class="display reveal" style="--d: 80ms">Your job hunt, <span class="accent">paid for</span> by your agent.</h1>
+          <p class="lede reveal" style="--d: 160ms">
+            It finds the jobs, scores them against your CV and writes your cover letters. It pays for
+            every step from an Oryne wallet, inside limits a Stellar contract enforces. Anything over
+            the limit, it asks you first.
+          </p>
+          <div class="cta-row reveal" style="--d: 240ms">
+            <button class="button primary" data-open>Start a job hunt <i class="arrow">→</i></button>
+            <a class="button outline" href="#view">See it work</a>
           </div>
-          <p id="estimate" class="note"></p>
         </div>
-        <div id="mode-own" class="mode" hidden>
-          <ol class="steps small muted">
-            <li>At <a href="https://oryne.org/app" target="_blank" rel="noopener">oryne.org/app</a>, switch to Test mode and add test USDC.</li>
-            <li>Connect an agent. Optional payee, CareerKit only: <code id="payee" class="copy" title="Copy"></code></li>
-            <li>Paste its secret. Used for this run only.</li>
-          </ol>
-          <label class="field"><span>Agent secret</span><input id="agentSecret" type="password" placeholder="S…" autocomplete="off" spellcheck="false" /></label>
-          <p class="note">You approve in your Oryne dashboard, with your own passkey or Freighter.</p>
-        </div>
-      </section>
 
-      <p id="formError" class="error" hidden></p>
-      <button id="start" type="submit" class="button primary wide">Start</button>
-      <p class="muted small center" id="modelNote"></p>
-    </form>
-
-    <section id="live" class="live">
-      <div id="idle">
-        <p class="label muted">How it works</p>
-        <ol class="how">
-          <li><span>Wallet</span><p>Your limits go into a contract on Stellar.</p></li>
-          <li><span>Search</span><p>Four job boards at once.</p><b>0.05</b></li>
-          <li><span>Score</span><p>Each promising job against your CV.</p><b>0.02</b></li>
-          <li><span>Write</span><p>Cover letters for the best matches.</p><b>0.25</b></li>
-          <li><span>Ask</span><p>The application pack is over its limit. The wallet refuses until you approve.</p><b>5</b></li>
-        </ol>
-        <p class="muted small">Prices in test USDC. Nothing real is spent.</p>
+        <aside class="hero-card reveal" style="--d: 300ms" aria-label="An example receipt">
+          <div class="receipt-head">
+            <span class="label muted">Agent receipt</span>
+            <span class="live-dot">Live on testnet</span>
+          </div>
+          <div class="receipt-total"><span>5.32</span><em>USDC</em></div>
+          <ul class="receipt-lines">
+            <li><span>Job search · 4 boards</span><b>0.05</b></li>
+            <li><span>Fit score · Neuroscale AI</span><b>0.02</b></li>
+            <li><span>Cover letter · Neuroscale AI</span><b>0.25</b></li>
+            <li class="refused"><span>Application pack · refused by the wallet</span><b>5.00</b></li>
+            <li class="approved"><span>Approved by you · paid</span><b>5.00</b></li>
+          </ul>
+          <p class="receipt-foot">Every line is a transaction on Stellar.</p>
+        </aside>
       </div>
 
-      <div id="running" hidden>
-        <div class="wallet">
-          <div class="wallet-row">
-            <span class="label muted">Agent wallet</span>
-            <button id="stop" class="link small" type="button">Stop</button>
-          </div>
-          <div class="spent"><span id="spentLabel">0.00</span><em>USDC spent</em></div>
-          <div class="meter"><div id="meterFill"></div></div>
-          <div class="wallet-row small muted"><span id="walletLine">Connecting…</span><span id="limitLabel"></span></div>
+      <div class="container stats reveal" style="--d: 360ms">
+        <div><strong>4</strong><span>job boards searched at once</span></div>
+        <div><strong>~5 s</strong><span>for each payment to settle</span></div>
+        <div><strong>0.05</strong><span>USDC for a search</span></div>
+        <div><strong>0</strong><span>real money: it runs on testnet</span></div>
+      </div>
+    </section>
+
+    <!-- The view -->
+    <section id="view" class="tone-charcoal band">
+      <div class="container">
+        <div class="band-head">
+          <p class="label muted reveal">The view</p>
+          <h2 class="statement reveal" style="--d: 80ms">Every step, and every payment, in the open.</h2>
+          <p class="lede reveal" style="--d: 160ms">Watch it search, score and write in real time. Each payment links to its Stellar transaction, and when it wants to spend more than you allowed, it stops and asks.</p>
         </div>
 
-        <div id="approval" class="approval" hidden></div>
+        <div class="window reveal" style="--d: 200ms" aria-hidden="true">
+          <div class="window-bar"><span></span><span></span><span></span><em>Job agent · live run</em></div>
+          <div class="window-body">
+            <div class="mock-col">
+              <div class="wallet">
+                <div class="wallet-row"><span class="label muted">Agent wallet</span><span class="small muted">1 per payment · 3 budget</span></div>
+                <div class="spent"><span>0.32</span><em>USDC spent</em></div>
+                <div class="meter"><div style="width: 11%"></div></div>
+              </div>
+              <div class="approval">
+                <p class="label">Needs your approval</p>
+                <h3>5 USDC for the application pack</h3>
+                <p>Best match: Founding Staff Software Engineer at Neuroscale AI. It's over the agent's limit, so the wallet refused it.</p>
+                <div class="actions"><span class="button primary sm">Approve</span><span class="button outline sm">Decline</span></div>
+              </div>
+            </div>
+            <div class="mock-col">
+              <p class="label muted">Activity</p>
+              <ol class="timeline">
+                <li class="paid"><span class="tag">Paid</span><span>0.05 USDC · job search <i class="tx">ac0068… ↗</i></span></li>
+                <li><span class="tag">Found</span><span>25 jobs across 4 boards</span></li>
+                <li class="paid"><span class="tag">Paid</span><span>0.02 USDC · fit score <i class="tx">589b5c… ↗</i></span></li>
+                <li class="paid"><span class="tag">Paid</span><span>0.25 USDC · cover letter <i class="tx">1ababd… ↗</i></span></li>
+                <li class="refused"><span class="tag">Refused</span><span>5 USDC · OverPerTxLimit. Nothing moved.</span></li>
+                <li class="ask"><span class="tag">Asks</span><span>Approval for the application pack</span></li>
+              </ol>
+              <p class="label muted mock-gap">Shortlist</p>
+              <div class="job"><div class="job-head"><div><div class="job-title">Founding Staff Engineer, Python</div><div class="job-meta">Neuroscale AI · USA · $100k–200k</div></div><div class="score hi"><strong>82</strong><span>Strong</span></div></div></div>
+              <div class="job"><div class="job-head"><div><div class="job-title">Senior Back-end Developer</div><div class="job-meta">Lemon.io · Europe</div></div><div class="score"><strong>64</strong><span>Good</span></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-        <p class="label muted section-label">Activity</p>
-        <ol id="timeline" class="timeline"></ol>
+    <!-- How it works -->
+    <section id="how" class="tone-white band">
+      <div class="container">
+        <div class="band-head split">
+          <h2 class="statement reveal">Four steps. You make one decision.</h2>
+          <p class="lede reveal" style="--d: 120ms">You set the budget once. The agent spends it on the work that moves your search forward, and leaves the big calls to you.</p>
+        </div>
+        <div class="cards">
+          <article class="card reveal"><div class="card-top"><span class="label">01</span><span class="card-price">Free</span></div><h3>Give it your CV</h3><p>Paste it or upload a PDF. Say what job you want and where.</p></article>
+          <article class="card reveal" style="--d: 80ms"><div class="card-top"><span class="label">02</span><span class="card-price">0.05</span></div><h3>It searches</h3><p>Remotive, Jobicy, Remote OK and Arbeitnow at once, deduplicated and ranked.</p></article>
+          <article class="card reveal" style="--d: 160ms"><div class="card-top"><span class="label">03</span><span class="card-price">0.02 · 0.25</span></div><h3>It scores and writes</h3><p>A fit score for each promising job, and cover letters for the best ones.</p></article>
+          <article class="card reveal" style="--d: 240ms"><div class="card-top"><span class="label">04</span><span class="card-price">5</span></div><h3>It asks you</h3><p>The full application pack is over its limit. Nothing moves until you approve.</p></article>
+        </div>
+      </div>
+    </section>
 
-        <div id="summary" class="summary" hidden></div>
-        <p id="jobsTitle" class="label muted section-label" hidden>Shortlist</p>
-        <div id="jobs" class="jobs"></div>
-        <div id="pack" class="pack" hidden></div>
-        <div id="receipt" class="receipt" hidden></div>
+    <!-- Limits -->
+    <section id="limits" class="tone-purple band">
+      <div class="container limits-grid">
+        <div>
+          <p class="label muted reveal">Why you can trust it with money</p>
+          <h2 class="statement reveal" style="--d: 80ms">Limits it can't break.</h2>
+          <p class="lede reveal" style="--d: 160ms">Models get prompt-injected and keys leak. So the agent's limits aren't a setting in our app. They're a mandate in a smart contract on Stellar, and the contract refuses any payment outside it, whoever asks.</p>
+        </div>
+        <div class="mandate reveal" style="--d: 200ms">
+          <p class="label muted">The agent's mandate</p>
+          <dl>
+            <div><dt>Per payment</dt><dd>1 USDC</dd></div>
+            <div><dt>Budget</dt><dd>3 USDC</dd></div>
+            <div><dt>May pay</dt><dd>CareerKit only</dd></div>
+            <div><dt>Expires</dt><dd>in 3 hours</dd></div>
+          </dl>
+          <ol class="layers">
+            <li><span>01</span>The model only gets the services you allowed.</li>
+            <li><span>02</span>The SDK refuses anything else before signing.</li>
+            <li><span>03</span>The contract refuses anything outside the mandate. Nothing gets past this one.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="tone-white band">
+      <div class="container limits-grid">
+        <div>
+          <p class="label muted reveal">Pricing</p>
+          <h2 class="statement reveal" style="--d: 80ms">Pay per step. Cents, not subscriptions.</h2>
+          <p class="lede reveal" style="--d: 160ms">CareerKit charges agents per call in USDC, settled on Stellar in about five seconds. On this demo it's all test USDC, so you spend nothing.</p>
+        </div>
+        <div class="price-table reveal" style="--d: 200ms" id="priceTable"></div>
+      </div>
+    </section>
+
+    <!-- Closing -->
+    <section class="tone-burgundy band closing">
+      <div class="container closing-grid">
+        <h2 class="statement reveal">Let the agent do the searching. Keep the keys to the wallet.</h2>
+        <div class="reveal" style="--d: 120ms">
+          <p class="lede">Bring your CV. It takes about two minutes, and you can watch every payment it makes.</p>
+          <button class="button light" data-open>Start a job hunt <i class="arrow">→</i></button>
+        </div>
       </div>
     </section>
   </main>
 
-  <footer class="foot small muted">
-    <span>Listings from <a href="https://remotive.com" target="_blank" rel="noopener">Remotive</a>,
-    <a href="https://jobicy.com" target="_blank" rel="noopener">Jobicy</a>,
-    <a href="https://remoteok.com" target="_blank" rel="noopener">Remote OK</a> and
-    <a href="https://www.arbeitnow.com" target="_blank" rel="noopener">Arbeitnow</a>. Apply on the original posting.</span>
-    <span><a href="/careerkit/docs" target="_blank">CareerKit API</a> · Built on <a href="https://oryne.org" target="_blank" rel="noopener">Oryne</a></span>
+  <footer class="tone-charcoal site-foot">
+    <div class="container foot-grid">
+      <img src="/static/oryne-logo-white.svg" alt="Oryne" class="foot-logo" />
+      <p class="small muted">Listings from <a href="https://remotive.com" target="_blank" rel="noopener">Remotive</a>,
+        <a href="https://jobicy.com" target="_blank" rel="noopener">Jobicy</a>,
+        <a href="https://remoteok.com" target="_blank" rel="noopener">Remote OK</a> and
+        <a href="https://www.arbeitnow.com" target="_blank" rel="noopener">Arbeitnow</a>. Apply on the original posting.</p>
+      <p class="small muted"><a href="/careerkit/docs" target="_blank">CareerKit API</a> · Built on <a href="https://oryne.org" target="_blank" rel="noopener">Oryne</a> · Stellar testnet</p>
+    </div>
   </footer>
+
+  <!-- Running in the background while the panel is closed -->
+  <button id="runPill" class="run-pill" hidden data-open><span class="pulse"></span><span id="runPillText">Job hunt running</span><b>Open</b></button>
+
+  <!-- The job hunt panel -->
+  <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-bar">
+      <div class="brand">
+        <img src="/static/oryne-logo.svg" alt="Oryne" />
+        <span class="brand-divider"></span>
+        <span class="brand-name" id="sheetTitle">New job hunt</span>
+      </div>
+      <span class="label nav-net">Testnet</span>
+      <button class="close" id="closeSheet" aria-label="Close">✕</button>
+    </div>
+
+    <div class="sheet-body">
+      <div class="grid">
+        <form id="form" class="form">
+          <section class="block">
+            <div class="block-head"><span class="label muted">01</span><h2>Your CV</h2></div>
+            <textarea id="cv" rows="8" placeholder="Paste your CV"></textarea>
+            <div class="row">
+              <label class="link">Upload a file<input id="cvFile" type="file" accept=".pdf,.docx,.txt,.md" hidden /></label>
+              <button type="button" id="sample" class="link">Use a sample</button>
+              <span class="muted small push">Never stored</span>
+            </div>
+          </section>
+
+          <section class="block">
+            <div class="block-head"><span class="label muted">02</span><h2>The job</h2></div>
+            <div class="two">
+              <label class="field"><span>Title</span><input id="role" placeholder="Python developer" required /></label>
+              <label class="field"><span>Location <i class="muted">optional</i></span><input id="location" placeholder="Worldwide" /></label>
+            </div>
+            <div id="boards" class="chips"></div>
+          </section>
+
+          <section class="block">
+            <div class="block-head"><span class="label muted">03</span><h2>What it may pay for</h2></div>
+            <div id="services" class="list"></div>
+            <label class="inline small muted">At most <input id="maxLetters" type="number" min="0" max="5" value="3" class="narrow" /> cover letters</label>
+          </section>
+
+          <section class="block">
+            <div class="block-head"><span class="label muted">04</span><h2>Wallet and limits</h2></div>
+            <div class="segmented" role="tablist">
+              <button type="button" class="seg active" data-mode="demo">Demo wallet</button>
+              <button type="button" class="seg" data-mode="own">My Oryne agent</button>
+            </div>
+            <div id="mode-demo" class="mode">
+              <div class="two">
+                <label class="field"><span>Per payment</span><span class="suffix"><input id="perTx" type="number" step="0.05" min="0.05" max="10" value="1" /><em>USDC</em></span></label>
+                <label class="field"><span>Budget</span><span class="suffix"><input id="budget" type="number" step="0.05" min="0.05" max="20" value="3" /><em>USDC</em></span></label>
+              </div>
+              <p id="estimate" class="note"></p>
+            </div>
+            <div id="mode-own" class="mode" hidden>
+              <ol class="steps small muted">
+                <li>At <a href="https://oryne.org/app" target="_blank" rel="noopener">oryne.org/app</a>, switch to Test mode and add test USDC.</li>
+                <li>Connect an agent. Optional payee, CareerKit only: <code id="payee" class="copy" title="Copy"></code></li>
+                <li>Paste its secret. Used for this run only.</li>
+              </ol>
+              <label class="field"><span>Agent secret</span><input id="agentSecret" type="password" placeholder="S…" autocomplete="off" spellcheck="false" /></label>
+              <p class="note">You approve in your Oryne dashboard, with your own passkey or Freighter.</p>
+            </div>
+          </section>
+
+          <p id="formError" class="error" hidden></p>
+          <button id="start" type="submit" class="button primary wide">Start</button>
+          <p class="muted small center" id="modelNote"></p>
+        </form>
+
+        <section id="live" class="live">
+          <div id="idle" class="idle">
+            <p class="label muted">What happens next</p>
+            <ol class="how">
+              <li><span>Wallet</span><p>Your limits go into a contract on Stellar.</p></li>
+              <li><span>Search</span><p>Four job boards at once.</p><b>0.05</b></li>
+              <li><span>Score</span><p>Each promising job against your CV.</p><b>0.02</b></li>
+              <li><span>Write</span><p>Cover letters for the best matches.</p><b>0.25</b></li>
+              <li><span>Ask</span><p>The application pack is over its limit. The wallet refuses until you approve.</p><b>5</b></li>
+            </ol>
+            <p class="muted small">Prices in test USDC. Nothing real is spent.</p>
+          </div>
+
+          <div id="running" hidden>
+            <div class="wallet">
+              <div class="wallet-row">
+                <span class="label muted">Agent wallet</span>
+                <button id="stop" class="link small" type="button">Stop</button>
+              </div>
+              <div class="spent"><span id="spentLabel">0.00</span><em>USDC spent</em></div>
+              <div class="meter"><div id="meterFill"></div></div>
+              <div class="wallet-row small muted"><span id="walletLine">Connecting…</span><span id="limitLabel"></span></div>
+            </div>
+
+            <div id="approval" class="approval" hidden></div>
+
+            <p class="label muted section-label">Activity</p>
+            <ol id="timeline" class="timeline"></ol>
+
+            <div id="summary" class="summary" hidden></div>
+            <p id="jobsTitle" class="label muted section-label" hidden>Shortlist</p>
+            <div id="jobs" class="jobs"></div>
+            <div id="pack" class="pack" hidden></div>
+            <div id="receipt" class="receipt" hidden></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
