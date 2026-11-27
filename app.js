@@ -1,5 +1,9 @@
 // The site: a home page, and the job hunt as a dashboard (form, then a live run over Server-Sent Events).
+// The agent runs on the Oryne API (/v1/jobs); this page only draws it.
 const $ = (id) => document.getElementById(id)
+const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname)
+const API_BASE = LOCAL ? 'http://localhost:8787' : document.querySelector('meta[name="oryne-api"]').content
+const API = `${API_BASE.replace(/\/$/, '')}/v1/jobs`
 const esc = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const safeUrl = (url) => (/^https:\/\//.test(url || '') ? url : '#')
@@ -14,7 +18,14 @@ let state = null
 // ---------------------------------------------------------------- setup
 
 async function load() {
-  config = await (await fetch('/api/config')).json()
+  const response = await fetch(`${API}/config`).catch(() => null)
+  if (!response?.ok) {
+    $('modelNote').textContent = "The job agent can't be reached right now. Try again in a minute."
+    $('start').disabled = true
+    return
+  }
+  config = await response.json()
+  $('careerkitLink').href = config.careerkit
   $('boards').innerHTML = config.boards
     .map((b) => `<label class="chip" title="${esc(b.about)}"><input type="checkbox" value="${esc(b.id)}" checked />${esc(b.name)}</label>`)
     .join('')
@@ -69,21 +80,53 @@ function switchMode(next) {
 }
 document.querySelectorAll('.seg').forEach((seg) => (seg.onclick = () => switchMode(seg.dataset.mode)))
 
-$('sample').onclick = () => {
-  $('cv').value = config.sampleCv
+$('sample').onclick = async () => {
+  $('cv').value = await (await fetch('/sample-cv.txt')).text()
   if (!$('role').value) $('role').value = 'Python developer'
 }
 
+// CVs are read here in the browser: the file never leaves this page, only the text you start a hunt with.
 $('cvFile').onchange = async (event) => {
   const file = event.target.files[0]
+  event.target.value = ''
   if (!file) return
-  const body = new FormData()
-  body.append('file', file)
-  const response = await fetch('/api/cv-file', { method: 'POST', body })
-  const data = await response.json()
-  if (!response.ok) return showError(data.detail || 'Could not read that file')
   showError('')
-  $('cv').value = data.text
+  try {
+    if (file.size > 5_000_000) throw new Error('That file is over 5 MB.')
+    const text = (await readCv(file)).replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*\n+/g, '\n\n').trim()
+    if (text.length < 80) throw new Error("Couldn't find much text in that file. Paste your CV instead.")
+    $('cv').value = text.slice(0, 15000)
+  } catch (error) {
+    showError(error.message || "Couldn't read that file. Paste your CV instead.")
+  }
+}
+
+async function readCv(file) {
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.pdf')) {
+    const pdfjs = await import('/assets/vendor/pdf.min.mjs')
+    pdfjs.GlobalWorkerOptions.workerSrc = '/assets/vendor/pdf.worker.min.mjs'
+    const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise
+    const pages = []
+    for (let n = 1; n <= Math.min(pdf.numPages, 8); n++) {
+      const content = await (await pdf.getPage(n)).getTextContent()
+      pages.push(content.items.map((item) => item.str + (item.hasEOL ? '\n' : '')).join(''))
+    }
+    return pages.join('\n')
+  }
+  if (name.endsWith('.docx')) {
+    if (!window.mammoth) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = '/assets/vendor/mammoth.browser.min.js'
+        script.onload = resolve
+        script.onerror = () => reject(new Error("Couldn't load the Word reader."))
+        document.head.appendChild(script)
+      })
+    }
+    return (await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value
+  }
+  return file.text()
 }
 
 function showError(text) {
@@ -109,7 +152,7 @@ $('form').onsubmit = async (event) => {
   }
   $('start').disabled = true
   try {
-    const response = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    const response = await fetch(`${API}/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error || 'Could not start')
     $('agentSecret').value = ''
@@ -223,7 +266,7 @@ function begin(id, runMode, form) {
   setStatus('running', 'Connecting')
   show('overview')
 
-  const source = new EventSource(`/api/runs/${id}/events`)
+  const source = new EventSource(`${API}/runs/${id}/events`)
   source.onmessage = (message) => {
     handle(JSON.parse(message.data), source)
     stats()
@@ -232,7 +275,7 @@ function begin(id, runMode, form) {
   source.onerror = () => state?.closed && source.close()
 }
 
-$('stop').onclick = () => state && fetch(`/api/runs/${state.id}/cancel`, { method: 'POST' })
+$('stop').onclick = () => state && fetch(`${API}/runs/${state.id}/cancel`, { method: 'POST' })
 
 function line(tag, html, kind = '', tx = '') {
   const li = document.createElement('li')
@@ -402,7 +445,7 @@ function approval(event) {
   if (state.mode !== 'demo') return
   const decide = async (approve) => {
     $('yes').disabled = $('no').disabled = true
-    const response = await fetch(`/api/runs/${state.id}/approvals/${event.id}`, {
+    const response = await fetch(`${API}/runs/${state.id}/approvals/${event.id}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ approve }),

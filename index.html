@@ -6,16 +6,18 @@
   <title>Job agent · Oryne</title>
   <meta name="description" content="An AI agent that finds jobs, scores them against your CV and writes your cover letters, paying for every step from its own Oryne wallet, inside limits it can't break." />
   <meta name="theme-color" content="#202020" />
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
-  <link rel="preload" href="/static/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="stylesheet" href="/static/style.css" />
+  <!-- The Oryne API that runs the agent (testnet). On localhost the page uses http://localhost:8787. -->
+  <meta name="oryne-api" content="https://testnet-apiv1.oryne.org" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preload" href="/assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <!-- Floating navigation -->
   <header class="topbar">
     <nav class="glass">
       <a class="brand" href="#top" aria-label="Job agent home">
-        <img src="/static/oryne-logo.svg" alt="Oryne" />
+        <img src="/assets/oryne-logo.svg" alt="Oryne" />
         <span class="brand-divider"></span>
         <span class="brand-name">Job agent</span>
       </a>
@@ -176,12 +178,12 @@
 
   <footer class="tone-charcoal site-foot">
     <div class="container foot-grid">
-      <img src="/static/oryne-logo-white.svg" alt="Oryne" class="foot-logo" />
+      <img src="/assets/oryne-logo-white.svg" alt="Oryne" class="foot-logo" />
       <p class="small muted">Listings from <a href="https://remotive.com" target="_blank" rel="noopener">Remotive</a>,
         <a href="https://jobicy.com" target="_blank" rel="noopener">Jobicy</a>,
         <a href="https://remoteok.com" target="_blank" rel="noopener">Remote OK</a> and
         <a href="https://www.arbeitnow.com" target="_blank" rel="noopener">Arbeitnow</a>. Apply on the original posting.</p>
-      <p class="small muted"><a href="/careerkit/docs" target="_blank">CareerKit API</a> · Built on <a href="https://oryne.org" target="_blank" rel="noopener">Oryne</a> · Stellar testnet</p>
+      <p class="small muted"><a id="careerkitLink" href="#" target="_blank" rel="noopener">CareerKit API</a> · Built on <a href="https://oryne.org" target="_blank" rel="noopener">Oryne</a> · Stellar testnet</p>
     </div>
   </footer>
 
@@ -190,7 +192,7 @@
     <aside class="side">
       <div class="side-head">
         <a class="side-brand" href="#top" data-close aria-label="Back to the site">
-          <img src="/static/oryne-logo-white.svg" alt="Oryne" />
+          <img src="/assets/oryne-logo-white.svg" alt="Oryne" />
           <span>Job agent</span>
         </a>
         <span class="net"><i></i>Testnet</span>
@@ -366,6 +368,6 @@
   <button id="runPill" class="run-pill" hidden data-open><span class="pulse"></span><span id="runPillText">Job hunt running</span><b>Open</b></button>
 
 
-  <script src="/static/app.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
