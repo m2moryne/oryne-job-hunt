@@ -1,6 +1,6 @@
 # Oryne job hunt
 
-A working sample of [Oryne](https://oryne.org): an AI job-hunting agent with its own wallet.
+A working sample of [Oryne](https://oryne.org): an AI job-hunting agent with its own wallet. Try it at **https://jobhunt.oryne.org**.
 
 You give it your CV and the job you want, choose which paid services it may buy, and set its limits. It searches four job boards, scores the best jobs against your CV and writes cover letters. It pays for each step in test USDC on Stellar, from its own Oryne wallet. When it wants something its limits don't allow (the 5 USDC application pack, against a 1 USDC per-payment limit), the wallet refuses and the agent asks you. Approve it, and the payment goes through on Stellar.
 
@@ -40,8 +40,8 @@ ORYNE_API_URL=http://localhost:8787 npm run jobs-setup   # once: CareerKit's add
 
 ## Deploy
 
-1. **API:** add `JOBS_CAREERKIT_ADDRESS`, `JOBS_OWNER_SECRET` and `JOBS_WALLET` to the testnet API's environment, plus the site's address in `CORS_ORIGINS`. To create the three values, run `ORYNE_API_URL=https://testnet-apiv1.oryne.org npm run jobs-setup -- --print`. `GET /v1/info` shows `features.jobHunt: true` once it's on.
-2. **Site:** import this repository in Vercel. There's no framework and no build command; `vercel.json` sets the security headers. The API the page calls is the `oryne-api` meta tag in `index.html`. If you change it, change `connect-src` in `vercel.json` to match.
+1. **API:** add `JOBS_CAREERKIT_ADDRESS`, `JOBS_OWNER_SECRET` and `JOBS_WALLET` to the testnet API's environment, plus `https://jobhunt.oryne.org` in `CORS_ORIGINS`. To create the three values, run `ORYNE_API_URL=https://testnet-apiv1.oryne.org npm run jobs-setup -- --print`. `GET /v1/info` shows `features.jobHunt: true` once it's on.
+2. **Site:** import this repository in Vercel and add the domain `jobhunt.oryne.org`. There's no framework and no build command; `vercel.json` sets the security headers. The API the page calls is the `oryne-api` meta tag in `index.html`. If you change it, change `connect-src` in `vercel.json` to match.
 
 ## License
 
