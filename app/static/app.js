@@ -1,13 +1,17 @@
-// The try-it page: a form, then a live view of the agent's run (Server-Sent Events).
+// The site: a home page, and the job hunt as a dashboard (form, then a live run over Server-Sent Events).
 const $ = (id) => document.getElementById(id)
 const esc = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const safeUrl = (url) => (/^https:\/\//.test(url || '') ? url : '#')
 const short = (text, n = 8) => (text ? `${text.slice(0, n)}…` : '')
+const usdc = (n) => Number(n || 0).toFixed(2)
+const EXPLORER = 'https://stellar.expert/explorer/testnet'
 
 let config = null
 let mode = 'demo'
 let state = null
+
+// ---------------------------------------------------------------- setup
 
 async function load() {
   config = await (await fetch('/api/config')).json()
@@ -16,71 +20,24 @@ async function load() {
     .join('')
   $('services').innerHTML = config.services
     .map(
-      (s) => `
-      <label class="item">
+      (s) => `<label class="row-item">
         <input type="checkbox" value="${esc(s.id)}" checked ${s.id === 'search' ? 'disabled' : ''} />
         <span><span class="name">${esc(s.name)}</span><span class="about">${esc(s.about)}</span><span class="flag" data-flag="${esc(s.id)}"></span></span>
-        <span class="price">${esc(s.price)}<em>USDC</em></span>
+        <span class="price">${esc(s.price)}</span>
       </label>`,
     )
     .join('')
-  $('payee').textContent = short(config.careerkitAddress, 12)
-  $('payee').title = `${config.careerkitAddress} (click to copy)`
-  $('payee').onclick = () => navigator.clipboard?.writeText(config.careerkitAddress)
-  $('modelNote').textContent = config.model ? '' : 'No model key on this server: the agent follows a fixed plan.'
-  if (!config.demoReady) switchMode('own')
-  document.querySelectorAll('#services input, #perTx, #budget, #maxLetters').forEach((el) => el.addEventListener('input', estimate))
-  estimate()
   $('priceTable').innerHTML = config.services
     .map((s) => `<div class="price-row"><div><h3>${esc(s.name)}</h3><p>${esc(s.about)}</p></div><strong>${esc(s.price)}<em>USDC</em></strong></div>`)
     .join('')
+  $('payee').textContent = short(config.careerkitAddress, 10)
+  $('payee').title = `${config.careerkitAddress} (click to copy)`
+  $('payee').onclick = () => navigator.clipboard?.writeText(config.careerkitAddress)
+  $('modelNote').textContent = config.model ? '' : 'No model key on this server, so the agent follows a fixed plan and writes from templates.'
+  if (!config.demoReady) switchMode('own')
+  document.querySelectorAll('#services input, #perTx, #budget, #maxLetters').forEach((el) => el.addEventListener('input', estimate))
+  estimate()
 }
-
-// ---------------------------------------------------------------- the home page and the panel
-
-const sheet = $('sheet')
-
-function openSheet() {
-  sheet.hidden = false
-  sheet.classList.remove('closing-out')
-  document.body.classList.add('locked')
-  $('runPill').hidden = true
-  if (location.hash !== '#hunt') history.replaceState(null, '', '#hunt')
-  if (!state) setTimeout(() => $('cv').focus({ preventScroll: true }), 300)
-}
-
-function closeSheet() {
-  sheet.classList.add('closing-out')
-  setTimeout(() => {
-    sheet.hidden = true
-    document.body.classList.remove('locked')
-  }, 240)
-  history.replaceState(null, '', location.pathname)
-  pill()
-}
-
-/** While a run goes on with the panel closed, a pill in the corner shows it and reopens the panel. */
-function pill() {
-  const panelClosed = sheet.hidden || sheet.classList.contains('closing-out')
-  const show = Boolean(state && !state.closed && panelClosed)
-  $('runPill').hidden = !show
-  if (!show) return
-  const asks = !$('approval').hidden
-  $('runPill').classList.toggle('asks', asks)
-  $('runPillText').textContent = asks ? 'Your agent needs your approval' : `Job hunt running · ${state.spent.toFixed(2)} USDC`
-}
-
-document.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('click', openSheet))
-$('closeSheet').onclick = closeSheet
-document.addEventListener('keydown', (event) => event.key === 'Escape' && !sheet.hidden && closeSheet())
-if (location.hash === '#hunt') openSheet()
-
-// Sections fade up as they come into view.
-const seen = new IntersectionObserver(
-  (entries) => entries.forEach((entry) => entry.isIntersecting && (entry.target.classList.add('in'), seen.unobserve(entry.target))),
-  { threshold: 0.12 },
-)
-document.querySelectorAll('.reveal').forEach((el) => seen.observe(el))
 
 const chosen = (selector) => [...document.querySelectorAll(`${selector} input:checked`)].map((el) => el.value)
 const price = (id) => Number(config.services.find((s) => s.id === id)?.price ?? 0)
@@ -92,16 +49,15 @@ function estimate() {
   const budget = Number($('budget').value)
   const letters = Math.min(Number($('maxLetters').value) || 0, 5)
   for (const flag of document.querySelectorAll('[data-flag]')) {
-    flag.textContent = price(flag.dataset.flag) > perTx ? 'Over the per-payment limit: needs your approval' : ''
+    flag.textContent = mode === 'demo' && price(flag.dataset.flag) > perTx ? 'Needs your approval' : ''
   }
   let most = price('search') * 2
   if (services.includes('match')) most += price('match') * 6
   if (services.includes('cover_letter')) most += price('cover_letter') * letters
-  const pack = services.includes('application_pack') ? price('application_pack') : 0
   $('estimate').innerHTML =
-    `A typical run spends about <b>${most.toFixed(2)} USDC</b>` +
-    (pack ? `, plus <b>${pack}</b> for the pack if you approve it` : '') +
-    `. The wallet stops at <b>${budget} USDC</b>, whatever happens.`
+    mode === 'demo'
+      ? `Usually about <b>${most.toFixed(2)} USDC</b>. It can never spend more than <b>${budget} USDC</b>.`
+      : `Usually about <b>${most.toFixed(2)} USDC</b>, inside your agent's own limits.`
 }
 
 function switchMode(next) {
@@ -109,6 +65,7 @@ function switchMode(next) {
   document.querySelectorAll('.seg').forEach((seg) => seg.classList.toggle('active', seg.dataset.mode === next))
   $('mode-demo').hidden = next !== 'demo'
   $('mode-own').hidden = next !== 'own'
+  estimate()
 }
 document.querySelectorAll('.seg').forEach((seg) => (seg.onclick = () => switchMode(seg.dataset.mode)))
 
@@ -137,6 +94,7 @@ function showError(text) {
 $('form').onsubmit = async (event) => {
   event.preventDefault()
   showError('')
+  if (state && !state.closed) return showError('A hunt is already running. Stop it first.')
   const body = {
     mode,
     cv: $('cv').value,
@@ -149,7 +107,7 @@ $('form').onsubmit = async (event) => {
     budget: $('budget').value,
     agentSecret: $('agentSecret').value,
   }
-  setStart('Starting…', true)
+  $('start').disabled = true
   try {
     const response = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json()
@@ -158,32 +116,117 @@ $('form').onsubmit = async (event) => {
     begin(data.id, data.mode, body)
   } catch (error) {
     showError(error.message)
-    setStart('Start', false)
+  } finally {
+    $('start').disabled = false
   }
 }
 
-function setStart(text, disabled) {
-  $('start').textContent = text
-  $('start').disabled = disabled
+// ---------------------------------------------------------------- the dashboard frame
+
+const sheet = $('sheet')
+const VIEWS = {
+  setup: ['New job hunt', 'Set it up once. The agent does the rest.'],
+  overview: ['Overview', 'What the agent is doing, and what it has spent.'],
+  shortlist: ['Shortlist', 'The jobs it scored, best first.'],
+  documents: ['Documents', 'Cover letters and the application pack.'],
+  receipt: ['Receipt', 'Every payment, each one a Stellar transaction.'],
 }
 
-// ---------------------------------------------------------------- the live view
+function show(view) {
+  document.querySelectorAll('.side-nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === view))
+  document.querySelectorAll('.view').forEach((v) => (v.hidden = v.dataset.view !== view))
+  $('viewTitle').textContent = VIEWS[view][0]
+  $('viewNote').textContent = VIEWS[view][1]
+  document.querySelector('.main-body').scrollTop = 0
+}
+document.querySelectorAll('.side-nav button').forEach((b) => (b.onclick = () => show(b.dataset.view)))
+document.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => show(b.dataset.goto)))
+
+function openSheet() {
+  sheet.hidden = false
+  sheet.classList.remove('closing-out')
+  document.body.classList.add('locked')
+  $('runPill').hidden = true
+  if (location.hash !== '#hunt') history.replaceState(null, '', '#hunt')
+}
+
+function closeSheet() {
+  sheet.classList.add('closing-out')
+  setTimeout(() => {
+    sheet.hidden = true
+    document.body.classList.remove('locked')
+    pill()
+  }, 230)
+  history.replaceState(null, '', location.pathname)
+}
+
+/** While a hunt runs with the dashboard closed, a pill in the corner shows it and reopens the dashboard. */
+function pill() {
+  const show = Boolean(state && !state.closed && (sheet.hidden || sheet.classList.contains('closing-out')))
+  $('runPill').hidden = !show
+  if (!show) return
+  $('runPill').classList.toggle('asks', state.asking)
+  $('runPillText').textContent = state.asking ? 'Your agent needs your approval' : `Job hunt running · ${usdc(state.spent)} USDC`
+}
+
+document.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('click', openSheet))
+document.querySelectorAll('[data-close]').forEach((el) =>
+  el.addEventListener('click', (event) => {
+    event.preventDefault()
+    closeSheet()
+  }),
+)
+document.addEventListener('keydown', (event) => event.key === 'Escape' && !sheet.hidden && closeSheet())
+if (location.hash === '#hunt') openSheet()
+
+const seen = new IntersectionObserver(
+  (entries) => entries.forEach((entry) => entry.isIntersecting && (entry.target.classList.add('in'), seen.unobserve(entry.target))),
+  { threshold: 0.12 },
+)
+document.querySelectorAll('.reveal').forEach((el) => seen.observe(el))
+
+function setStatus(kind, text) {
+  $('status').className = `status ${kind}`
+  $('status').querySelector('span').textContent = text
+}
+
+function count(id, n) {
+  $(id).hidden = !n
+  $(id).textContent = n
+}
+
+// ---------------------------------------------------------------- a run
 
 function begin(id, runMode, form) {
-  state = { id, mode: runMode, jobs: {}, scores: {}, letters: {}, payments: [], spent: 0, budget: Number(form.budget) }
-  $('idle').hidden = true
-  $('running').hidden = false
+  state = {
+    id, mode: runMode, jobs: {}, found: 0, scores: {}, letters: {}, payments: [], spent: 0,
+    budget: Number(form.budget), perTx: form.perTx, asking: false, closed: false,
+  }
   $('timeline').innerHTML = ''
   $('jobs').innerHTML = ''
-  for (const el of ['summary', 'pack', 'receipt', 'approval', 'jobsTitle']) $(el).hidden = true
-  $('walletLine').textContent = 'Connecting…'
-  $('limitLabel').textContent = ''
-  meter()
-  setStart('Running…', true)
-  if (window.innerWidth < 1024) $('live').scrollIntoView({ behavior: 'smooth' })
+  $('letters').innerHTML = ''
+  $('receipt').innerHTML = ''
+  $('pack').hidden = true
+  $('approval').hidden = true
+  $('summaryPanel').hidden = true
+  $('mandate').innerHTML = ''
+  $('mandateTx').hidden = true
+  for (const empty of ['jobsEmpty', 'docsEmpty', 'receiptEmpty']) $(empty).hidden = false
+  for (const n of ['navJobs', 'navDocs', 'navPays', 'navAsk']) count(n, 0)
+  $('overviewEmpty').hidden = true
+  $('overviewLive').hidden = false
+  $('liveDot').hidden = false
+  $('stop').hidden = false
+  $('wcAddress').textContent = 'Connecting…'
+  $('wcAddress').removeAttribute('href')
+  stats()
+  setStatus('running', 'Connecting')
+  show('overview')
+
   const source = new EventSource(`/api/runs/${id}/events`)
   source.onmessage = (message) => {
     handle(JSON.parse(message.data), source)
+    stats()
     pill()
   }
   source.onerror = () => state?.closed && source.close()
@@ -191,12 +234,13 @@ function begin(id, runMode, form) {
 
 $('stop').onclick = () => state && fetch(`/api/runs/${state.id}/cancel`, { method: 'POST' })
 
-function line(tag, html, kind = '') {
+function line(tag, html, kind = '', tx = '') {
   const li = document.createElement('li')
   li.className = kind
-  li.innerHTML = `<span class="tag">${esc(tag)}</span><span>${html}</span>`
-  $('timeline').appendChild(li)
-  li.scrollIntoView({ block: 'nearest' })
+  li.innerHTML = `<span class="tag">${esc(tag)}</span><span>${html}</span><span class="tx-cell">${tx}</span>`
+  const list = $('timeline')
+  list.appendChild(li)
+  list.scrollTop = list.scrollHeight
 }
 
 const txLink = (event) =>
@@ -218,15 +262,17 @@ function handle(event, source) {
       break
     case 'wallet':
       state.budget = Number(event.budget)
-      $('walletLine').innerHTML = `${event.mode === 'demo' ? 'Demo wallet' : 'Your wallet'} ${esc(short(event.wallet))}`
-      $('limitLabel').textContent = `${event.perTx} per payment · ${event.budget} budget`
-      line('Wallet', `Agent connected: ${esc(event.perTx)} USDC per payment, ${esc(event.budget)} budget ${txLink(event)}`)
+      state.perTx = event.perTx
+      $('wcLimit').textContent = `${event.perTx} per payment`
+      $('wcAddress').textContent = `${event.mode === 'demo' ? 'Demo wallet' : 'Your wallet'} ${short(event.wallet, 6)}`
+      $('wcAddress').href = `${EXPLORER}/contract/${event.wallet}`
+      mandate(event)
+      line('Wallet', 'Agent connected with your limits', 'paid', txLink(event))
+      setStatus('running', 'Running')
       break
     case 'note':
-      line('Note', esc(event.text), 'quiet')
-      break
     case 'thinking':
-      line('Thinks', esc(event.text), 'quiet')
+      line('Note', esc(event.text), 'quiet')
       break
     case 'tool': {
       const [tag, text] = (TOOL_TEXT[event.name] || (() => ['Tool', esc(event.name)]))(event.args || {})
@@ -235,89 +281,125 @@ function handle(event, source) {
     }
     case 'paid':
       state.spent = Number(event.spent)
-      state.payments.push(event)
-      line('Paid', `${esc(event.amount)} USDC, settled on Stellar ${txLink(event)}`, 'paid')
-      meter()
+      state.payments.push({ ...event, at: event.at })
+      line('Paid', `${esc(event.amount)} USDC · ${esc(event.what.toLowerCase())}`, 'paid', txLink(event))
+      receipt()
       break
     case 'refused':
       line(
         'Refused',
-        event.by === 'wallet'
-          ? `The wallet contract refused ${esc(event.amount)} USDC (${esc(event.reason)}). Nothing moved.`
-          : `Not signed: ${esc(event.reason)}`,
+        event.by === 'wallet' ? `The wallet refused ${esc(event.amount)} USDC (${esc(event.reason)}). Nothing moved.` : `Not signed: ${esc(event.reason)}`,
         'refused',
       )
       break
     case 'approval_needed':
-      line('Asks', `Approval for ${esc(event.amount)} USDC: ${esc(event.what)}`, 'ask')
-      showApproval(event)
+      state.asking = true
+      line('Asks', `Your approval for ${esc(event.amount)} USDC`, 'ask')
+      approval(event)
+      count('navAsk', 1)
+      setStatus('asks', 'Needs you')
       break
     case 'approving':
-      $('approval').innerHTML = '<p class="label">Approval</p><p>Signing approve_once on Stellar…</p>'
+      $('approval').querySelector('.actions').innerHTML = '<span class="small muted">Signing on Stellar…</span>'
       break
     case 'approved_onchain':
-      line('Approved', `One-time approval signed ${txLink(event)}`, 'paid')
+      line('Approved', 'One-time approval signed', 'paid', txLink(event))
       break
     case 'approval_decided':
+      state.asking = false
       $('approval').hidden = true
+      count('navAsk', 0)
+      setStatus('running', 'Running')
       if (event.status !== 'approved') line('Declined', 'The agent carries on without it', 'quiet')
       break
     case 'jobs':
       for (const job of event.jobs) state.jobs[job.id] = job
-      line(
-        'Found',
-        `${event.jobs.length} jobs <span class="tx boards">${Object.entries(event.boards || {})
-          .map(([board, outcome]) => `${esc(board)} ${esc(outcome.replace(' jobs', ''))}`)
-          .join(' · ')}</span>`,
-      )
+      state.found += event.jobs.length
+      state.boards = Object.values(event.boards || {}).filter((o) => o.endsWith('jobs')).length
+      line('Found', `${event.jobs.length} jobs across ${state.boards} boards`)
       break
     case 'score':
       state.scores[event.job_id] = event
-      renderJobs()
+      jobs()
       break
     case 'letter':
       state.letters[event.job_id] = event.letter
-      renderJobs()
+      letters()
+      jobs()
       break
     case 'pack':
-      renderPack(event)
+      pack(event)
       break
     case 'error':
       line('Error', esc(event.text), 'refused')
       break
     case 'done':
-      $('summary').hidden = !event.summary
-      $('summary').textContent = event.summary
-      renderReceipt()
+      if (event.summary) {
+        $('summaryPanel').hidden = false
+        $('summary').textContent = event.summary
+      }
       break
     case 'closed':
       state.closed = true
+      state.asking = false
       source.close()
       $('approval').hidden = true
-      setStart('Run again', false)
+      $('stop').hidden = true
+      $('liveDot').hidden = true
+      count('navAsk', 0)
+      setStatus('done', 'Finished')
       break
   }
 }
 
-function meter() {
-  const pct = state.budget ? Math.min(100, (100 * state.spent) / state.budget) : 0
-  $('meterFill').style.width = `${pct}%`
-  $('spentLabel').textContent = state.spent.toFixed(2)
+function stats() {
+  const scored = Object.values(state.scores).sort((a, b) => b.score - a.score)
+  $('statSpent').textContent = usdc(state.spent)
+  $('statSpentNote').textContent = `of ${usdc(state.budget)} USDC budget`
+  $('statJobs').textContent = state.found
+  $('statJobsNote').textContent = state.found ? `${Object.keys(state.scores).length} scored` : 'Searching…'
+  $('statBest').textContent = scored[0] ? scored[0].score : '–'
+  $('statBestNote').textContent = scored[0] ? `${scored[0].job} · ${scored[0].company}` : 'Not scored yet'
+  $('statPays').textContent = state.payments.length
+  $('wcSpent').textContent = usdc(state.spent)
+  const ratio = state.budget ? Math.min(1, state.spent / state.budget) : 0
+  $('wcFill').style.width = `${ratio * 100}%`
+  $('wcFill').classList.toggle('full', ratio >= 1)
+  $('wcLeft').textContent = `${usdc(Math.max(0, state.budget - state.spent))} left`
+  count('navJobs', Object.keys(state.scores).length)
+  count('navDocs', Object.keys(state.letters).length + (state.hasPack ? 1 : 0))
+  count('navPays', state.payments.length)
 }
 
-function showApproval(event) {
+function mandate(event) {
+  const rows = [
+    ['Per payment', `${event.perTx} USDC`],
+    ['Budget', `${event.budget} USDC`],
+    ['May pay', event.mode === 'demo' ? 'CareerKit only' : 'As set in your mandate'],
+    ['Expires', event.mode === 'demo' ? 'In 3 hours' : 'As set in your mandate'],
+    ['Agent', `<a class="tx" href="${EXPLORER}/account/${esc(event.agent)}" target="_blank" rel="noopener">${esc(short(event.agent, 10))} ↗</a>`],
+  ]
+  $('mandate').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${k === 'Agent' ? v : esc(v)}</dd></div>`).join('')
+  if (event.explorer) {
+    $('mandateTx').href = safeUrl(event.explorer)
+    $('mandateTx').hidden = false
+  }
+}
+
+function approval(event) {
   const box = $('approval')
   box.hidden = false
-  const head = `<p class="label">Needs your approval</p>
-    <h3>${esc(event.amount)} USDC for the ${esc(event.what.toLowerCase())}</h3>
-    <p>${event.why ? `${esc(event.why)}. ` : ''}It's over the agent's limit, so the wallet refused it. Approving signs a one-time exception on Stellar.</p>`
-  if (state.mode !== 'demo') {
-    box.innerHTML = `${head}<div class="actions"><a class="button primary sm" href="${safeUrl(config.dashboard)}/approvals" target="_blank" rel="noopener">Open Oryne approvals</a></div>`
-    return
-  }
-  box.innerHTML = `${head}<div class="actions">
-    <button class="button primary sm" id="yes">Approve</button>
-    <button class="button outline sm" id="no">Decline</button></div>`
+  const actions =
+    state.mode === 'demo'
+      ? `<button class="button primary sm" id="yes">Approve ${esc(event.amount)} USDC</button><button class="button outline sm" id="no">Decline</button>`
+      : `<a class="button primary sm" href="${safeUrl(config.dashboard)}/approvals" target="_blank" rel="noopener">Approve in Oryne ↗</a>`
+  box.innerHTML = `<div>
+      <p class="label">Needs your approval</p>
+      <h3>${esc(event.amount)} USDC for the ${esc(event.what.toLowerCase())}</h3>
+      <p class="why">${event.why ? `${esc(event.why)}. ` : ''}It's over the agent's ${esc(state.perTx)} USDC limit, so the wallet refused it.</p>
+    </div>
+    <div class="actions">${actions}</div>`
+  if (state.mode !== 'demo') return
   const decide = async (approve) => {
     $('yes').disabled = $('no').disabled = true
     const response = await fetch(`/api/runs/${state.id}/approvals/${event.id}`, {
@@ -331,65 +413,85 @@ function showApproval(event) {
   $('no').onclick = () => decide(false)
 }
 
-function renderJobs() {
+function jobs() {
   const ids = Object.keys(state.scores).sort((a, b) => state.scores[b].score - state.scores[a].score)
-  $('jobsTitle').hidden = !ids.length
+  $('jobsEmpty').hidden = ids.length > 0
   $('jobs').innerHTML = ids
     .map((id) => {
       const job = state.jobs[id] || {}
       const s = state.scores[id]
       const cls = s.score >= 70 ? 'hi' : s.score < 40 ? 'lo' : ''
-      const letter = state.letters[id]
       const notes =
         (s.strengths || []).slice(0, 2).map((x) => `<li>${esc(x)}</li>`).join('') +
         (s.gaps || []).slice(0, 2).map((x) => `<li class="gap">${esc(x)}</li>`).join('')
       return `<article class="job">
         <div class="job-head">
+          <div class="score ${cls}"><strong>${esc(s.score)}</strong><span>${esc(s.verdict)}</span></div>
           <div>
             <div class="job-title">${esc(job.title)}</div>
-            <div class="job-meta">${esc(job.company)} · ${esc(job.location)}${job.salary ? ` · ${esc(job.salary)}` : ''}</div>
+            <div class="job-meta">${esc(job.company)} · ${esc(job.location)}${job.salary ? ` · ${esc(job.salary)}` : ''} · ${esc(job.source)}</div>
           </div>
-          <div class="score ${cls}"><strong>${esc(s.score)}</strong><span>${esc(s.verdict)}</span></div>
+          <div class="job-side">
+            ${state.letters[id] ? '<span class="pill">Letter ready</span>' : ''}
+            <a href="${safeUrl(job.url)}" target="_blank" rel="noopener">Apply ↗</a>
+          </div>
         </div>
         ${notes ? `<ul class="notes">${notes}</ul>` : ''}
-        <div class="job-links">
-          <a href="${safeUrl(job.url)}" target="_blank" rel="noopener">Apply on ${esc(job.source)} ↗</a>
-          ${letter ? '<details><summary>Cover letter</summary></details>' : ''}
-        </div>
-        ${letter ? `<div class="letter" hidden>${esc(letter)}</div>` : ''}
       </article>`
     })
     .join('')
-  // The letter opens below the links, full width.
-  for (const details of $('jobs').querySelectorAll('details')) {
-    const letter = details.closest('.job').querySelector('.letter')
-    details.ontoggle = () => (letter.hidden = !details.open)
-  }
 }
 
-function renderPack(pack) {
-  const box = $('pack')
-  box.hidden = false
+function letters() {
+  const ids = Object.keys(state.letters)
+  $('docsEmpty').hidden = ids.length > 0 || state.hasPack
+  $('letters').innerHTML = ids
+    .map((id) => {
+      const job = state.jobs[id] || {}
+      return `<details class="doc"${ids.length === 1 ? ' open' : ''}>
+        <summary><span>${esc(job.title)} · ${esc(job.company)}</span><span>Cover letter</span></summary>
+        <div class="letter"><button class="copy-btn" type="button">Copy</button>${esc(state.letters[id])}</div>
+      </details>`
+    })
+    .join('')
+  $('letters').querySelectorAll('.copy-btn').forEach((b) =>
+    (b.onclick = () => {
+      navigator.clipboard?.writeText(state.letters[ids[[...$('letters').querySelectorAll('.copy-btn')].indexOf(b)]])
+      b.textContent = 'Copied'
+    }),
+  )
+}
+
+function pack(p) {
+  state.hasPack = true
+  $('docsEmpty').hidden = true
   const list = (items) => (items || []).map((x) => `<li>${esc(x)}</li>`).join('')
-  box.innerHTML = `<p class="label muted">Application pack</p>
-    <h3>${esc(pack.job)}, ${esc(pack.company)}</h3>
-    <h4>CV summary</h4><p>${esc(pack.summary)}</p>
-    <h4>CV bullets</h4><ul>${list(pack.bullets)}</ul>
-    <h4>Interview questions</h4>
-    <ol>${(pack.interview || []).map((q) => `<li><b>${esc(q.question)}</b><br /><span class="muted">${esc(q.how_to_answer)}</span></li>`).join('')}</ol>
-    <h4>Keywords</h4><p class="muted">${esc((pack.keywords || []).join(', '))}</p>
-    <h4>Cover letter</h4><div class="letter">${esc(pack.cover_letter)}</div>`
+  $('pack').hidden = false
+  $('pack').innerHTML = `<section class="pnl">
+    <header><h2>Application pack · ${esc(p.job)}, ${esc(p.company)}</h2><span class="pill">5 USDC · approved</span></header>
+    <div class="pack-grid">
+      <div><h4>CV summary</h4><p>${esc(p.summary)}</p></div>
+      <div><h4>Keywords to include</h4><p class="muted">${esc((p.keywords || []).join(', '))}</p></div>
+      <div><h4>CV bullets</h4><ul>${list(p.bullets)}</ul></div>
+      <div><h4>Interview questions</h4><ol>${(p.interview || []).map((q) => `<li><b>${esc(q.question)}</b><br /><span class="muted">${esc(q.how_to_answer)}</span></li>`).join('')}</ol></div>
+    </div>
+    <details class="doc"><summary><span>Cover letter for this job</span><span>Show</span></summary><div class="letter">${esc(p.cover_letter)}</div></details>
+  </section>`
 }
 
-function renderReceipt() {
-  if (!state.payments.length) return
-  const box = $('receipt')
-  box.hidden = false
-  box.innerHTML = `<p class="label muted section-label">Receipt</p><table>
-    ${state.payments
-      .map((p) => `<tr><td>${esc(p.what)}<a class="tx" href="${safeUrl(p.explorer)}" target="_blank" rel="noopener">${esc(short(p.tx))} ↗</a></td><td>${esc(p.amount)}</td></tr>`)
+function receipt() {
+  $('receiptEmpty').hidden = state.payments.length > 0
+  const time = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  $('receipt').innerHTML = `<table class="rtable">
+    <thead><tr><th>Time</th><th>For</th><th>Transaction</th><th class="num">USDC</th></tr></thead>
+    <tbody>${state.payments
+      .map(
+        (p) => `<tr><td class="muted">${esc(time(p.at))}</td><td>${esc(p.what)}</td>
+          <td><a class="tx" href="${safeUrl(p.explorer)}" target="_blank" rel="noopener">${esc(short(p.tx, 10))} ↗</a></td>
+          <td class="num">${esc(p.amount)}</td></tr>`,
+      )
       .join('')}
-    <tr class="total"><td>Paid by the agent from its wallet</td><td>${state.spent.toFixed(2)} USDC</td></tr></table>`
+    <tr class="total"><td></td><td>Total</td><td></td><td class="num">${usdc(state.spent)}</td></tr></tbody></table>`
 }
 
 load()
